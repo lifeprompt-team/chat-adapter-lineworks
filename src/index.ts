@@ -10,13 +10,25 @@ export {
   decodeThreadId,
   encodeThreadId,
 } from "./thread-id";
-export { StaticLineWorksTokenProvider } from "./token-provider";
-export type { LineWorksTokenProvider } from "./token-provider";
+export {
+  ServiceAccountLineWorksTokenProvider,
+  StaticLineWorksTokenProvider,
+} from "./token-provider";
+export type {
+  LineWorksTokenProvider,
+  ServiceAccountLineWorksTokenProviderConfig,
+} from "./token-provider";
 export type {
   LineWorksAdapterConfig,
+  LineWorksAttachmentUploadUrl,
   LineWorksCallbackPayload,
+  LineWorksChannel,
+  LineWorksCreateChannelResponse,
   LineWorksMessageEvent,
+  LineWorksOutboundContent,
   LineWorksPostbackEvent,
+  LineWorksSendMessageResponse,
   LineWorksThreadId,
   LineWorksThreadKind,
+  LineWorksUploadedAttachment,
 } from "./types";

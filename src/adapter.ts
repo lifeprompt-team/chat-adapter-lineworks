@@ -10,6 +10,7 @@ import {
   parseMarkdown,
   type Adapter,
   type AdapterPostableMessage,
+  type Attachment,
   type ChatInstance,
   type EmojiValue,
   type FetchOptions,
@@ -56,7 +57,9 @@ export class LineWorksAdapter
     this.logger = config.logger ?? new ConsoleLogger();
     this.client = new LineWorksClient({
       accessToken: config.accessToken,
+      accessTokenProvider: config.accessTokenProvider,
       botId: config.botId,
+      fetch: config.fetch,
     });
   }
 
@@ -109,7 +112,7 @@ export class LineWorksAdapter
     }
 
     const event = verified.payload as LineWorksMessageEvent;
-    if (event.content.type !== "text") {
+    if (!isProcessableMessageEvent(event)) {
       this.logger.warn("Ignoring unsupported LINE WORKS message type", {
         type: event.content.type,
       });
@@ -142,9 +145,10 @@ export class LineWorksAdapter
         });
 
     const isChannelMessage = Boolean(event.source.channelId);
+    const attachments = this.buildInboundAttachments(event);
 
     return new Message<unknown>({
-      attachments: [],
+      attachments,
       author: {
         fullName: event.source.userId,
         isBot: "unknown",
@@ -172,13 +176,6 @@ export class LineWorksAdapter
     message: AdapterPostableMessage
   ): Promise<RawMessage<LineWorksSendMessageResponse>> {
     const files = extractFiles(message);
-    if (files.length > 0) {
-      throw new ValidationError(
-        "lineworks",
-        "LINE WORKS file uploads are not supported yet"
-      );
-    }
-
     const text = this.converter.renderPostable(message);
     if (text.length > MAX_TEXT_LENGTH) {
       throw new ValidationError(
@@ -188,10 +185,38 @@ export class LineWorksAdapter
     }
 
     const destination = this.decodeThreadId(threadId);
-    const raw =
-      destination.kind === "user"
-        ? await this.client.sendUserMessage(destination.userId, text)
-        : await this.client.sendChannelMessage(destination.channelId, text);
+    let raw: LineWorksSendMessageResponse | undefined;
+
+    if (text.length > 0) {
+      raw =
+        destination.kind === "user"
+          ? await this.client.sendUserMessage(destination.userId, text)
+          : await this.client.sendChannelMessage(destination.channelId, text);
+    }
+
+    for (const file of files) {
+      const upload = await this.client.createAttachment({
+        fileName: file.filename,
+      });
+      const uploaded = await this.client.uploadAttachment({
+        data: file.data,
+        fileName: file.filename,
+        mimeType: file.mimeType,
+        uploadUrl: upload.uploadUrl,
+      });
+      const content = {
+        fileId: uploaded.fileId ?? upload.fileId,
+        type: file.mimeType?.startsWith("image/") ? "image" : "file",
+      } as const;
+      raw =
+        destination.kind === "user"
+          ? await this.client.sendUserContent(destination.userId, content)
+          : await this.client.sendChannelContent(destination.channelId, content);
+    }
+
+    if (!raw) {
+      throw new ValidationError("lineworks", "LINE WORKS message text or files are required");
+    }
 
     return {
       id: createSentMessageId(),
@@ -237,10 +262,7 @@ export class LineWorksAdapter
   }
 
   async addReaction(): Promise<void> {
-    throw new NotImplementedError(
-      "LINE WORKS reactions are not supported",
-      "addReaction"
-    );
+    // LINE WORKS Bot API has no reaction primitive. Treat reaction hooks as no-op.
   }
 
   async removeReaction(
@@ -248,10 +270,7 @@ export class LineWorksAdapter
     _messageId: string,
     _emoji: EmojiValue | string
   ): Promise<void> {
-    throw new NotImplementedError(
-      "LINE WORKS reactions are not supported",
-      "removeReaction"
-    );
+    // LINE WORKS Bot API has no reaction primitive. Treat reaction hooks as no-op.
   }
 
   async editMessage(): Promise<RawMessage<unknown>> {
@@ -269,10 +288,7 @@ export class LineWorksAdapter
   }
 
   async startTyping(): Promise<void> {
-    throw new NotImplementedError(
-      "LINE WORKS typing indicators are not supported",
-      "startTyping"
-    );
+    // LINE WORKS Bot API has no typing indicator primitive.
   }
 
   private requireChat(): ChatInstance {
@@ -285,6 +301,33 @@ export class LineWorksAdapter
 
     return this.chat;
   }
+
+  private buildInboundAttachments(event: LineWorksMessageEvent): Attachment[] {
+    const content = event.content;
+    if (
+      !(
+        content.type === "image" ||
+        content.type === "file" ||
+        content.type === "audio" ||
+        content.type === "video"
+      ) ||
+      typeof content.fileId !== "string" ||
+      content.fileId.length === 0
+    ) {
+      return [];
+    }
+
+    const fileId = content.fileId;
+    const attachmentType = content.type === "image" ? "image" : content.type;
+
+    return [
+      {
+        fetchData: () => this.client.downloadAttachmentData(fileId),
+        name: `lineworks-${fileId}`,
+        type: attachmentType,
+      },
+    ];
+  }
 }
 
 function validateConfig(config: LineWorksAdapterConfig): void {
@@ -296,8 +339,8 @@ function validateConfig(config: LineWorksAdapterConfig): void {
     throw new ValidationError("lineworks", "botSecret is required");
   }
 
-  if (!config.accessToken) {
-    throw new ValidationError("lineworks", "accessToken is required");
+  if (!config.accessToken && !config.accessTokenProvider) {
+    throw new ValidationError("lineworks", "accessToken or accessTokenProvider is required");
   }
 }
 
@@ -306,6 +349,20 @@ function parseIssuedTime(issuedTime: number | string): Date {
     typeof issuedTime === "number" ? new Date(issuedTime) : new Date(issuedTime);
 
   return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function isProcessableMessageEvent(event: LineWorksMessageEvent): boolean {
+  if (event.content.type === "text") {
+    return true;
+  }
+  return (
+    (event.content.type === "image" ||
+      event.content.type === "file" ||
+      event.content.type === "audio" ||
+      event.content.type === "video") &&
+    typeof event.content.fileId === "string" &&
+    event.content.fileId.length > 0
+  );
 }
 
 function getEventText(event: LineWorksMessageEvent): string {

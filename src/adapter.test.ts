@@ -126,6 +126,40 @@ describe("LineWorksAdapter", () => {
     expect(processMessage).toHaveBeenCalledTimes(1);
   });
 
+  it("processes inbound file messages as lazy attachments", async () => {
+    const processMessage = vi.fn();
+    const adapter = createAdapter();
+    await adapter.initialize(createChat(processMessage));
+
+    const body = JSON.stringify({
+      content: { fileId: "file-1", type: "image" },
+      issuedTime: "2026-04-29T00:00:00Z",
+      source: { userId: "user-1" },
+      type: "message",
+    });
+
+    const response = await adapter.handleWebhook(
+      new Request("https://example.com/webhook", {
+        body,
+        headers: {
+          "X-WORKS-BotId": "bot-id",
+          "X-WORKS-Signature": createLineWorksSignature(body, "bot-secret"),
+        },
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(processMessage).toHaveBeenCalledTimes(1);
+    const message = processMessage.mock.calls[0]?.[2];
+    expect(message.attachments).toMatchObject([
+      {
+        name: "lineworks-file-1",
+        type: "image",
+      },
+    ]);
+  });
+
   it("rejects invalid webhook signatures", async () => {
     const adapter = createAdapter();
     await adapter.initialize(createChat());
@@ -142,5 +176,58 @@ describe("LineWorksAdapter", () => {
     );
 
     expect(response.status).toBe(401);
+  });
+
+  it("posts uploaded files as LINE WORKS file messages", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("", { status: 201 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            fileId: "file-1",
+            uploadUrl: "https://upload.example.com/file",
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            fileId: "file-1",
+            fileName: "document.pdf",
+            fileSize: 10,
+          }),
+          { status: 201 }
+        )
+      )
+      .mockResolvedValueOnce(new Response("", { status: 201 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+
+    await adapter.postMessage(adapter.encodeThreadId({ kind: "user", userId: "user-1" }), {
+      files: [
+        {
+          data: Buffer.from("file"),
+          filename: "document.pdf",
+          mimeType: "application/pdf",
+        },
+      ],
+      raw: "see attached",
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      content: { text: "see attached", type: "text" },
+    });
+    expect(JSON.parse(fetchMock.mock.calls[3]?.[1]?.body as string)).toEqual({
+      content: { fileId: "file-1", type: "file" },
+    });
+  });
+
+  it("treats typing and reactions as no-op", async () => {
+    const adapter = createAdapter();
+
+    await expect(adapter.startTyping()).resolves.toBeUndefined();
+    await expect(adapter.addReaction()).resolves.toBeUndefined();
+    await expect(adapter.removeReaction("thread", "message", "thumbsup")).resolves.toBeUndefined();
   });
 });
