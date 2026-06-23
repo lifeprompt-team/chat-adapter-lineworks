@@ -72,13 +72,14 @@ See [docs/setup.md](docs/setup.md) for LINE WORKS callback and routing details.
 - Service Account JWT token acquisition and caching.
 - Channel detail and channel member list client primitives.
 - Bot attachment upload and download client primitives.
+- Chat SDK Card buttons rendered as LINE WORKS button templates.
+- Postback callbacks dispatched as Chat SDK action events.
 - Stable thread ID encode/decode.
 - Basic HTTP error mapping.
 
 ## Not supported yet
 
-- Rich templates and button templates.
-- Postback/action events.
+- Rich templates beyond basic button templates.
 - Message history fetching.
 - Typing indicators.
 - Message edit/delete.
