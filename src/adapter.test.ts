@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { Actions, Button, Card, CardText, LinkButton } from "chat";
 import type { ChatInstance, Logger, StateAdapter } from "chat";
 import { LineWorksAdapter } from "./adapter";
 import { createLineWorksSignature } from "./signature";
@@ -12,18 +13,21 @@ const logger: Logger = {
   warn: vi.fn(),
 };
 
-function createChat(processMessage = vi.fn()): ChatInstance {
+function createChat(args?: {
+  processAction?: ReturnType<typeof vi.fn>;
+  processMessage?: ReturnType<typeof vi.fn>;
+}): ChatInstance {
   return {
     getLogger: () => logger,
     getState: () => ({}) as StateAdapter,
     getUserName: () => "lineworks-bot",
     handleIncomingMessage: vi.fn(),
-    processAction: vi.fn(),
+    processAction: args?.processAction ?? vi.fn(),
     processAppHomeOpened: vi.fn(),
     processAssistantContextChanged: vi.fn(),
     processAssistantThreadStarted: vi.fn(),
     processMemberJoinedChannel: vi.fn(),
-    processMessage,
+    processMessage: args?.processMessage ?? vi.fn(),
     processModalClose: vi.fn(),
     processModalSubmit: vi.fn(),
     processReaction: vi.fn(),
@@ -102,7 +106,7 @@ describe("LineWorksAdapter", () => {
   it("verifies webhook signatures and processes text messages", async () => {
     const processMessage = vi.fn();
     const adapter = createAdapter();
-    await adapter.initialize(createChat(processMessage));
+    await adapter.initialize(createChat({ processMessage }));
 
     const body = JSON.stringify({
       content: { text: "hello", type: "text" },
@@ -129,7 +133,7 @@ describe("LineWorksAdapter", () => {
   it("processes inbound file messages as lazy attachments", async () => {
     const processMessage = vi.fn();
     const adapter = createAdapter();
-    await adapter.initialize(createChat(processMessage));
+    await adapter.initialize(createChat({ processMessage }));
 
     const body = JSON.stringify({
       content: { fileId: "file-1", type: "image" },
@@ -220,6 +224,85 @@ describe("LineWorksAdapter", () => {
     });
     expect(JSON.parse(fetchMock.mock.calls[3]?.[1]?.body as string)).toEqual({
       content: { fileId: "file-1", type: "file" },
+    });
+  });
+
+  it("posts Chat SDK cards with buttons as LINE WORKS button templates", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+
+    await adapter.postMessage(
+      adapter.encodeThreadId({ channelId: "channel-1", kind: "channel" }),
+      Card({
+        title: "Pending",
+        children: [
+          CardText("Approve this?"),
+          Actions([
+            Button({ id: "approve", label: "Approve", value: "pending-1" }),
+            LinkButton({ label: "Details", url: "https://example.com/cases/case-1" }),
+          ]),
+        ],
+      })
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      content: {
+        actions: [
+          {
+            label: "Approve",
+            postback: "approve\npending-1",
+            type: "message",
+          },
+          {
+            label: "Details",
+            type: "uri",
+            uri: "https://example.com/cases/case-1",
+          },
+        ],
+        contentText: "Pending\nApprove this?",
+        type: "button_template",
+      },
+    });
+  });
+
+  it("processes postback callbacks as Chat SDK actions", async () => {
+    const processAction = vi.fn();
+    const adapter = createAdapter();
+    await adapter.initialize(createChat({ processAction }));
+
+    const body = JSON.stringify({
+      data: "approve\npending-1",
+      issuedTime: "2026-04-29T00:00:00Z",
+      source: {
+        channelId: "channel-1",
+        userId: "user-1",
+      },
+      type: "postback",
+    });
+
+    const response = await adapter.handleWebhook(
+      new Request("https://example.com/webhook", {
+        body,
+        headers: {
+          "X-WORKS-BotId": "bot-id",
+          "X-WORKS-Signature": createLineWorksSignature(body, "bot-secret"),
+        },
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(processAction).toHaveBeenCalledTimes(1);
+    expect(processAction.mock.calls[0]?.[0]).toMatchObject({
+      actionId: "approve",
+      threadId: adapter.encodeThreadId({
+        channelId: "channel-1",
+        kind: "channel",
+      }),
+      user: {
+        userId: "user-1",
+      },
+      value: "pending-1",
     });
   });
 

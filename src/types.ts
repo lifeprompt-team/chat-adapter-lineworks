@@ -69,8 +69,25 @@ export interface LineWorksSendMessageResponse {
 
 export type LineWorksOutboundContent =
   | { text: string; type: "text" }
+  | {
+      actions: LineWorksTemplateAction[];
+      contentText: string;
+      type: "button_template";
+    }
   | { fileId: string; type: "image" }
   | { fileId: string; type: "file" };
+
+export type LineWorksTemplateAction =
+  | {
+      label: string;
+      postback: string;
+      type: "message";
+    }
+  | {
+      label: string;
+      type: "uri";
+      uri: string;
+    };
 
 export interface LineWorksChannel {
   channelId: string;
