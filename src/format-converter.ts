@@ -17,6 +17,12 @@ export class LineWorksFormatConverter extends BaseFormatConverter {
   }
 
   renderPostable(message: AdapterPostableMessage): string {
+    if (typeof message === "string") {
+      return message.trim();
+    }
+    if (typeof message === "object" && message !== null && "raw" in message) {
+      return message.raw.trim();
+    }
     return markdownToPlainText(super.renderPostable(message)).trim();
   }
 }

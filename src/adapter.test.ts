@@ -227,6 +227,36 @@ describe("LineWorksAdapter", () => {
     });
   });
 
+  it("posts multi-line plain text preserving content.text newlines", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+    const text = ["line1", "", "line2", "- item"].join("\n");
+
+    await adapter.postMessage(
+      adapter.encodeThreadId({ channelId: "channel-1", kind: "channel" }),
+      text
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      content: { text, type: "text" },
+    });
+  });
+
+  it("posts multi-line raw text preserving content.text newlines", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+    const text = "1行目\n\n2行目";
+
+    await adapter.postMessage(
+      adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+      { raw: text }
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      content: { text, type: "text" },
+    });
+  });
+
   it("posts Chat SDK cards with buttons as LINE WORKS button templates", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
     const adapter = createAdapter({ fetch: fetchMock });
