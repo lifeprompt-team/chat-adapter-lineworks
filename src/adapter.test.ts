@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { ValidationError } from "@chat-adapter/shared";
 import { Actions, Button, Card, CardText, LinkButton } from "chat";
 import type { ChatInstance, Logger, StateAdapter } from "chat";
 import { LineWorksAdapter } from "./adapter";
@@ -91,6 +92,25 @@ describe("LineWorksAdapter", () => {
     const adapter = createAdapter({ treatChannelMessagesAsMentions: true });
     const event: LineWorksMessageEvent = {
       content: { text: "hello", type: "text" },
+      issuedTime: "2026-04-29T00:00:00Z",
+      source: {
+        channelId: "channel-1",
+        domainId: 123,
+        userId: "user-1",
+      },
+      type: "message",
+    };
+
+    expect(adapter.parseMessage(event).isMention).toBe(true);
+  });
+
+  it("treats channel messages with bot mention tag as mentions", () => {
+    const adapter = createAdapter({ botUserId: "bot-user" });
+    const event: LineWorksMessageEvent = {
+      content: {
+        text: 'hello <m userId="bot-user"> help me',
+        type: "text",
+      },
       issuedTime: "2026-04-29T00:00:00Z",
       source: {
         channelId: "channel-1",
@@ -254,6 +274,116 @@ describe("LineWorksAdapter", () => {
 
     expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
       content: { text, type: "text" },
+    });
+  });
+
+  it("posts markdown messages as plain text", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+
+    await adapter.postMessage(
+      adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+      { markdown: "**bold** text" }
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      content: { text: "bold text", type: "text" },
+    });
+  });
+
+  it("rejects outbound text over 2000 characters", async () => {
+    const adapter = createAdapter();
+    const text = "a".repeat(2001);
+
+    await expect(
+      adapter.postMessage(
+        adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+        text
+      )
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("rejects button templates with more than 10 actions", async () => {
+    const adapter = createAdapter();
+    const buttons = Array.from({ length: 11 }, (_value, index) =>
+      Button({ id: `action-${index}`, label: `Action ${index}` })
+    );
+
+    await expect(
+      adapter.postMessage(
+        adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+        Card({
+          title: "Too many actions",
+          children: [Actions(buttons)],
+        })
+      )
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("10 actions"),
+    });
+  });
+
+  it("rejects button templates with content text over 1000 characters", async () => {
+    const adapter = createAdapter();
+
+    await expect(
+      adapter.postMessage(
+        adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+        Card({
+          title: "a".repeat(1001),
+          children: [
+            Actions([Button({ id: "approve", label: "Approve" })]),
+          ],
+        })
+      )
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("1000 characters or fewer"),
+    });
+  });
+
+  it("rejects button templates with labels over 20 characters", async () => {
+    const adapter = createAdapter();
+
+    await expect(
+      adapter.postMessage(
+        adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+        Card({
+          title: "Long label",
+          children: [
+            Actions([
+              Button({
+                id: "approve",
+                label: "a".repeat(21),
+              }),
+            ]),
+          ],
+        })
+      )
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("20 characters or fewer"),
+    });
+  });
+
+  it("rejects button templates with postback data over 1000 characters", async () => {
+    const adapter = createAdapter();
+
+    await expect(
+      adapter.postMessage(
+        adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+        Card({
+          title: "Long postback",
+          children: [
+            Actions([
+              Button({
+                id: "approve",
+                label: "Approve",
+                value: "a".repeat(1000),
+              }),
+            ]),
+          ],
+        })
+      )
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("1000 characters or fewer"),
     });
   });
 

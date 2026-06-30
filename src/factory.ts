@@ -15,8 +15,12 @@ export function createLineWorksAdapter(
     (accessToken
       ? undefined
       : createServiceAccountTokenProviderFromEnv());
+  const botUserId = config.botUserId ?? process.env.LINEWORKS_BOT_USER_ID;
   const userName =
     config.userName ?? process.env.LINEWORKS_BOT_USER_NAME ?? "lineworks-bot";
+  const treatChannelMessagesAsMentions =
+    config.treatChannelMessagesAsMentions ??
+    process.env.LINEWORKS_TREAT_CHANNEL_MESSAGES_AS_MENTIONS === "true";
 
   if (!botId) {
     throw new ValidationError(
@@ -44,9 +48,10 @@ export function createLineWorksAdapter(
     accessTokenProvider,
     botId,
     botSecret,
+    botUserId,
     fetch: config.fetch,
     logger: config.logger,
-    treatChannelMessagesAsMentions: config.treatChannelMessagesAsMentions,
+    treatChannelMessagesAsMentions,
     userName,
   });
 }

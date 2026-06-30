@@ -128,7 +128,9 @@ export class LineWorksFormatConverter extends BaseFormatConverter {
 	}
 
 	fromAst(ast: Root): string {
-		return stringifyMarkdown(ast).trim();
+		return formatLineWorksPlainTextFromMarkdown({
+			text: stringifyMarkdown(ast),
+		});
 	}
 
 	renderPostable(message: AdapterPostableMessage): string {

@@ -230,4 +230,16 @@ describe("LineWorksFormatConverter", () => {
 		expect(converter.renderPostable(formatted)).toBe(formatted);
 		expect(converter.renderPostable({ raw: formatted })).toBe(formatted);
 	});
+
+	it("converts AST to LINE WORKS plain text", () => {
+		const ast = converter.toAst("**bold** text");
+
+		expect(converter.fromAst(ast)).toBe("bold text");
+	});
+
+	it("converts AST through renderFormatted-compatible plain text", () => {
+		const ast = converter.toAst("line1\n\n[line2](https://example.com)");
+
+		expect(converter.fromAst(ast)).toBe("line1\n\nline2\nhttps://example.com");
+	});
 });

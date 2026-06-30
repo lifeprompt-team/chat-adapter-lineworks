@@ -23,6 +23,7 @@ import {
 	type ThreadInfo,
 	type WebhookOptions,
 } from "chat";
+import { isLineWorksChannelMessageMention } from "./channel-mention";
 import { LineWorksClient } from "./client";
 import {
 	LINEWORKS_MAX_TEXT_LENGTH,
@@ -177,7 +178,12 @@ export class LineWorksAdapter implements Adapter<LineWorksThreadId, unknown> {
 			formatted: parseMarkdown(text),
 			id: createEventId(event),
 			isMention: isChannelMessage
-				? this.config.treatChannelMessagesAsMentions === true
+				? isLineWorksChannelMessageMention({
+						botUserId: this.config.botUserId,
+						text,
+						treatChannelMessagesAsMentions:
+							this.config.treatChannelMessagesAsMentions,
+					})
 				: true,
 			metadata: {
 				dateSent: parseIssuedTime(event.issuedTime),

@@ -96,6 +96,12 @@ lineworks:channel:{base64url(channelId)}
 
 `domainId` is preserved in raw event metadata where available, but it is not encoded into the thread ID because LINE WORKS send endpoints route by `botId` plus `userId` or `channelId`.
 
+LINE WORKS does not expose message-level reply threads through the Bot API. Callback payloads do not include reply-to message metadata.
+
+## Message IDs
+
+Inbound event IDs, postback action IDs, and outbound `postMessage()` return values use adapter-generated IDs. They are stable within this adapter, but they are not the official LINE WORKS `messageId` from the Bot API.
+
 ## Message behavior
 
 - 1:1 messages are treated as mentions.
