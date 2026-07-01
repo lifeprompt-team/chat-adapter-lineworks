@@ -1,7 +1,26 @@
-const LINEWORKS_MENTION_TAG_PATTERN = /<m\s+userId="([^"]*)"/g;
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasPlainTextBotMention(args: {
+  botUserName: string;
+  text: string;
+}): boolean {
+  const botUserName = args.botUserName.trim();
+  if (!botUserName) {
+    return false;
+  }
+
+  // @Bot Name の直後が空白・改行・文末であること（@AxMates Botany 等の誤爆を避ける）
+  const usernamePattern = new RegExp(
+    `@${escapeRegex(botUserName)}(?![\\S])`,
+    "i",
+  );
+  return usernamePattern.test(args.text);
+}
 
 export function isLineWorksChannelMessageMention(args: {
-  botUserId?: string;
+  botUserName?: string;
   text: string;
   treatChannelMessagesAsMentions?: boolean;
 }): boolean {
@@ -9,16 +28,8 @@ export function isLineWorksChannelMessageMention(args: {
     return true;
   }
 
-  const botUserId = args.botUserId?.trim();
-  if (!botUserId) {
-    return false;
-  }
-
-  for (const match of args.text.matchAll(LINEWORKS_MENTION_TAG_PATTERN)) {
-    if (match[1]?.trim() === botUserId) {
-      return true;
-    }
-  }
-
-  return false;
+  return hasPlainTextBotMention({
+    botUserName: args.botUserName ?? "",
+    text: args.text,
+  });
 }

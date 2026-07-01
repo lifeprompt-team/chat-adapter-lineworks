@@ -10,8 +10,6 @@ export type LineWorksThreadId =
 export interface LineWorksAdapterConfig {
   accessToken?: string;
   accessTokenProvider?: LineWorksTokenProvider;
-  /** LINE WORKS userId。channel inbound の `<m userId="...">` mention 判定に使う */
-  botUserId?: string;
   botId: string;
   botSecret: string;
   fetch?: typeof fetch;

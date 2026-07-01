@@ -12,28 +12,55 @@ describe("isLineWorksChannelMessageMention", () => {
     ).toBe(true);
   });
 
-  it("botUserId が未設定なら channel text は mention 扱いにしない", () => {
+  it("botUserName が未設定なら channel text は mention 扱いにしない", () => {
     expect(
       isLineWorksChannelMessageMention({
-        text: 'hello <m userId="bot-user">',
+        text: "@AxMates Bot hello",
       }),
     ).toBe(false);
   });
 
-  it("channel text に bot の mention tag があれば mention 扱いにする", () => {
+  it("実 payload 相当: @表示名 mention 付き channel text を mention 扱いにする", () => {
     expect(
       isLineWorksChannelMessageMention({
-        botUserId: "bot-user",
-        text: 'hello <m userId="bot-user"> please help',
+        botUserName: "AxMates Bot",
+        text: "@AxMates Bot テスト",
       }),
     ).toBe(true);
   });
 
-  it("他ユーザーの mention tag だけでは mention 扱いにしない", () => {
+  it("実 payload 相当: mention なし channel text は mention 扱いにしない", () => {
     expect(
       isLineWorksChannelMessageMention({
-        botUserId: "bot-user",
-        text: 'hello <m userId="other-user">',
+        botUserName: "AxMates Bot",
+        text: "テスト",
+      }),
+    ).toBe(false);
+  });
+
+  it("表示名にスペースがあっても @mention を検出する", () => {
+    expect(
+      isLineWorksChannelMessageMention({
+        botUserName: "AxMates Bot",
+        text: "@AxMates Bot \nやっほー",
+      }),
+    ).toBe(true);
+  });
+
+  it("@表示名 の直後が文末なら mention 扱いにする", () => {
+    expect(
+      isLineWorksChannelMessageMention({
+        botUserName: "AxMates Bot",
+        text: "@AxMates Bot",
+      }),
+    ).toBe(true);
+  });
+
+  it("@表示名 prefix だけでは mention 扱いにしない", () => {
+    expect(
+      isLineWorksChannelMessageMention({
+        botUserName: "AxMates Bot",
+        text: "@AxMates Botany hello",
       }),
     ).toBe(false);
   });

@@ -27,9 +27,7 @@ LINEWORKS_PRIVATE_KEY
 LINEWORKS_SCOPES
 ```
 
-`LINEWORKS_BOT_USER_NAME` is optional.
-
-`LINEWORKS_BOT_USER_ID` is optional. When set, channel messages containing `<m userId="...">` tags that reference this user ID are treated as mentions.
+`LINEWORKS_BOT_USER_NAME` is optional. When set, channel messages whose `content.text` contains `@Bot Name` are treated as mentions.
 
 `LINEWORKS_TREAT_CHANNEL_MESSAGES_AS_MENTIONS=true` treats all inbound channel text messages as mentions.
 

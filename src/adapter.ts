@@ -183,7 +183,7 @@ export class LineWorksAdapter implements Adapter<LineWorksThreadId, unknown> {
 			id: createEventId(event),
 			isMention: isChannelMessage
 				? isLineWorksChannelMessageMention({
-						botUserId: this.config.botUserId,
+						botUserName: this.userName,
 						text,
 						treatChannelMessagesAsMentions:
 							this.config.treatChannelMessagesAsMentions,
