@@ -15,6 +15,7 @@ export interface LineWorksAdapterConfig {
   fetch?: typeof fetch;
   logger?: Logger;
   treatChannelMessagesAsMentions?: boolean;
+  /** Bot display name used to detect `@Bot Name` plain-text mentions in channel messages. */
   userName?: string;
 }
 
