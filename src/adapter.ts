@@ -32,6 +32,7 @@ import {
 import { decodeThreadId, encodeThreadId } from "./thread-id";
 import type {
 	LineWorksAdapterConfig,
+	LineWorksEventSource,
 	LineWorksMessageEvent,
 	LineWorksOutboundContent,
 	LineWorksPostbackEvent,
@@ -47,7 +48,8 @@ import {
 const MAX_BUTTON_TEMPLATE_TEXT_LENGTH = 1000;
 const MAX_BUTTON_TEMPLATE_ACTIONS = 10;
 const MAX_BUTTON_TEMPLATE_LABEL_LENGTH = 20;
-const MAX_BUTTON_TEMPLATE_POSTBACK_LENGTH = 1000;
+/** message action の postback フィールド上限（LINE WORKS Bot API） */
+const MAX_MESSAGE_ACTION_POSTBACK_LENGTH = 1000;
 const ACTION_DATA_DELIMITER = "\n";
 
 export class LineWorksAdapter implements Adapter<LineWorksThreadId, unknown> {
@@ -132,6 +134,19 @@ export class LineWorksAdapter implements Adapter<LineWorksThreadId, unknown> {
 			this.logger.warn("Ignoring unsupported LINE WORKS message type", {
 				type: event.content.type,
 			});
+			return new Response("OK", { status: 200 });
+		}
+
+		if (isMessagePostbackEvent(event)) {
+			this.processPostbackFromData(
+				{
+					data: getMessagePostbackData(event),
+					issuedTime: event.issuedTime,
+					raw: event,
+					source: event.source,
+				},
+				options,
+			);
 			return new Response("OK", { status: 200 });
 		}
 
@@ -375,27 +390,52 @@ export class LineWorksAdapter implements Adapter<LineWorksThreadId, unknown> {
 		event: LineWorksPostbackEvent,
 		options?: WebhookOptions,
 	): void {
-		const threadId = event.source.channelId
+		this.processPostbackFromData(
+			{
+				data: event.data,
+				issuedTime: event.issuedTime,
+				raw: event,
+				source: event.source,
+			},
+			options,
+		);
+	}
+
+	private processPostbackFromData(
+		args: {
+			data: string;
+			issuedTime: number | string;
+			raw: LineWorksMessageEvent | LineWorksPostbackEvent;
+			source: LineWorksEventSource;
+		},
+		options?: WebhookOptions,
+	): void {
+		const threadId = args.source.channelId
 			? this.encodeThreadId({
-					channelId: event.source.channelId,
-					domainId: event.source.domainId,
+					channelId: args.source.channelId,
+					domainId: args.source.domainId,
 					kind: "channel",
 				})
 			: this.encodeThreadId({
-					domainId: event.source.domainId,
+					domainId: args.source.domainId,
 					kind: "user",
-					userId: event.source.userId,
+					userId: args.source.userId,
 				});
-		const decoded = decodePostbackData(event.data);
+		const decoded = decodePostbackData(args.data);
 
 		this.requireChat().processAction(
 			{
 				actionId: decoded.actionId,
 				adapter: this,
-				messageId: createPostbackMessageId(event),
-				raw: event,
+				messageId: createPostbackMessageId({
+					data: args.data,
+					issuedTime: args.issuedTime,
+					source: args.source,
+					type: args.raw.type,
+				}),
+				raw: args.raw,
 				threadId,
-				user: createPostbackAuthor(event),
+				user: createPostbackAuthor(args.source),
 				...(decoded.value !== undefined ? { value: decoded.value } : {}),
 			},
 			options,
@@ -499,10 +539,10 @@ function encodePostbackData(args: {
 		args.value === undefined || args.value.length === 0
 			? args.actionId
 			: `${args.actionId}${ACTION_DATA_DELIMITER}${args.value}`;
-	if (encoded.length > MAX_BUTTON_TEMPLATE_POSTBACK_LENGTH) {
+	if (encoded.length > MAX_MESSAGE_ACTION_POSTBACK_LENGTH) {
 		throw new ValidationError(
 			"lineworks",
-			`LINE WORKS postback data must be ${MAX_BUTTON_TEMPLATE_POSTBACK_LENGTH} characters or fewer`,
+			`LINE WORKS message action postback must be ${MAX_MESSAGE_ACTION_POSTBACK_LENGTH} characters or fewer`,
 		);
 	}
 	return encoded;
@@ -695,23 +735,55 @@ function collectCardChildText(child: CardChild): string[] {
 	}
 }
 
-function createPostbackAuthor(event: LineWorksPostbackEvent): Author {
+function isMessagePostbackEvent(event: LineWorksMessageEvent): boolean {
+	return (
+		event.content.type === "text" &&
+		typeof event.content.postback === "string" &&
+		event.content.postback.length > 0
+	);
+}
+
+function getMessagePostbackData(event: LineWorksMessageEvent): string {
+	if (!isMessagePostbackEvent(event)) {
+		throw new ValidationError(
+			"lineworks",
+			"Expected LINE WORKS message event with postback",
+		);
+	}
+
+	const content = event.content;
+	if (content.type !== "text" || typeof content.postback !== "string") {
+		throw new ValidationError(
+			"lineworks",
+			"Expected LINE WORKS message event with postback",
+		);
+	}
+
+	return content.postback;
+}
+
+function createPostbackAuthor(source: LineWorksEventSource): Author {
 	return {
-		fullName: event.source.userId,
+		fullName: source.userId,
 		isBot: "unknown",
 		isMe: false,
-		userId: event.source.userId,
-		userName: event.source.userId,
+		userId: source.userId,
+		userName: source.userId,
 	};
 }
 
-function createPostbackMessageId(event: LineWorksPostbackEvent): string {
+function createPostbackMessageId(args: {
+	data: string;
+	issuedTime: number | string;
+	source: LineWorksEventSource;
+	type: string;
+}): string {
 	const hashInput = JSON.stringify({
-		channelId: event.source.channelId ?? null,
-		data: event.data,
-		issuedTime: event.issuedTime,
-		type: event.type,
-		userId: event.source.userId,
+		channelId: args.source.channelId ?? null,
+		data: args.data,
+		issuedTime: args.issuedTime,
+		type: args.type,
+		userId: args.source.userId,
 	});
 	const hash = createHash("sha256").update(hashInput).digest("base64url");
 

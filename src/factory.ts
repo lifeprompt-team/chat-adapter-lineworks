@@ -14,7 +14,7 @@ export function createLineWorksAdapter(
     config.accessTokenProvider ??
     (accessToken
       ? undefined
-      : createServiceAccountTokenProviderFromEnv());
+      : createServiceAccountTokenProviderFromEnv({ fetch: config.fetch }));
   const botUserId = config.botUserId ?? process.env.LINEWORKS_BOT_USER_ID;
   const userName =
     config.userName ?? process.env.LINEWORKS_BOT_USER_NAME ?? "lineworks-bot";
@@ -56,7 +56,9 @@ export function createLineWorksAdapter(
   });
 }
 
-function createServiceAccountTokenProviderFromEnv() {
+function createServiceAccountTokenProviderFromEnv(args: {
+  fetch?: typeof fetch;
+}) {
   const clientId = process.env.LINEWORKS_CLIENT_ID;
   const clientSecret = process.env.LINEWORKS_CLIENT_SECRET;
   const serviceAccount = process.env.LINEWORKS_SERVICE_ACCOUNT;
@@ -77,6 +79,7 @@ function createServiceAccountTokenProviderFromEnv() {
   return new ServiceAccountLineWorksTokenProvider({
     clientId,
     clientSecret,
+    fetch: args.fetch,
     privateKey,
     scopes,
     serviceAccount,

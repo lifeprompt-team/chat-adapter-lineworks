@@ -28,7 +28,7 @@ export interface LineWorksClientConfig {
 }
 
 export type LineWorksMessageContent =
-  | { text: string; type: "text" }
+  | { postback?: string; text: string; type: "text" }
   | {
       fileId?: string;
       originalContentUrl?: string;

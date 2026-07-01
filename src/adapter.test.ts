@@ -363,7 +363,7 @@ describe("LineWorksAdapter", () => {
     });
   });
 
-  it("rejects button templates with postback data over 1000 characters", async () => {
+  it("rejects button templates with message action postback over 1000 characters", async () => {
     const adapter = createAdapter();
 
     await expect(
@@ -384,6 +384,38 @@ describe("LineWorksAdapter", () => {
       )
     ).rejects.toMatchObject({
       message: expect.stringContaining("1000 characters or fewer"),
+    });
+  });
+
+  it("excludes disabled buttons from button templates", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+
+    await adapter.postMessage(
+      adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+      Card({
+        title: "Actions",
+        children: [
+          Actions([
+            Button({ id: "enabled", label: "OK" }),
+            Button({ disabled: true, id: "disabled", label: "No" }),
+          ]),
+        ],
+      })
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      content: {
+        actions: [
+          {
+            label: "OK",
+            postback: "enabled",
+            type: "message",
+          },
+        ],
+        contentText: "Actions",
+        type: "button_template",
+      },
     });
   });
 
@@ -422,6 +454,53 @@ describe("LineWorksAdapter", () => {
         contentText: "Pending\nApprove this?",
         type: "button_template",
       },
+    });
+  });
+
+  it("processes message action postbacks from message callbacks as Chat SDK actions", async () => {
+    const processAction = vi.fn();
+    const processMessage = vi.fn();
+    const adapter = createAdapter();
+    await adapter.initialize(createChat({ processAction, processMessage }));
+
+    const body = JSON.stringify({
+      content: {
+        postback: "approve\npending-1",
+        text: "Approve",
+        type: "text",
+      },
+      issuedTime: "2026-04-29T00:00:00Z",
+      source: {
+        channelId: "channel-1",
+        userId: "user-1",
+      },
+      type: "message",
+    });
+
+    const response = await adapter.handleWebhook(
+      new Request("https://example.com/webhook", {
+        body,
+        headers: {
+          "X-WORKS-BotId": "bot-id",
+          "X-WORKS-Signature": createLineWorksSignature(body, "bot-secret"),
+        },
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(processAction).toHaveBeenCalledTimes(1);
+    expect(processMessage).not.toHaveBeenCalled();
+    expect(processAction.mock.calls[0]?.[0]).toMatchObject({
+      actionId: "approve",
+      threadId: adapter.encodeThreadId({
+        channelId: "channel-1",
+        kind: "channel",
+      }),
+      user: {
+        userId: "user-1",
+      },
+      value: "pending-1",
     });
   });
 
