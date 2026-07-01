@@ -108,6 +108,8 @@ LINE WORKS does not expose message-level reply threads through the Bot API. Call
 
 Inbound event IDs, postback action IDs, and outbound `postMessage()` return values use adapter-generated IDs. They are stable within this adapter, but they are not the official LINE WORKS `messageId` from the Bot API.
 
+When `postMessage()` sends text or a button template plus one or more attachments, it performs multiple Bot API calls. The returned `raw` field reflects only the last send response (typically the final attachment). Earlier send responses are not aggregated.
+
 ## Message behavior
 
 - 1:1 messages are treated as mentions.
@@ -118,6 +120,7 @@ Inbound event IDs, postback action IDs, and outbound `postMessage()` return valu
 - Outbound text over 2,000 characters throws `ValidationError` instead of being split automatically.
 - Plain `string` and `{ raw: string }` messages are trimmed at both ends only. Internal newlines are preserved.
 - When a Chat SDK Card contains buttons, only the Card body is sent as `contentText`. Any outer message text, markdown, or raw text on the same post is ignored.
+- Disabled `Button` actions are omitted from button templates. If every button is disabled, the Card is not sent as a button template and the adapter falls back to plain text rendering for the same message.
 
 ## Button templates
 
@@ -137,6 +140,7 @@ This package depends on Chat SDK primitives:
 ```text
 src/
   adapter.ts
+  attachment-content.ts
   client.ts
   errors.ts
   factory.ts
@@ -157,7 +161,7 @@ src/
 Run tests:
 
 ```sh
-npm test           # 86 tests (vitest + coverage)
+npm test           # vitest + coverage
 npm run typecheck
 npm run build
 ```

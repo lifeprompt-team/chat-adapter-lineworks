@@ -22,6 +22,11 @@ import { toLineWorksButtonTemplateContent } from "./button-template/button-templ
 import { isLineWorksChannelMessageMention } from "./channel-mention";
 import { LineWorksClient } from "./client";
 import {
+	inboundAttachmentType,
+	isInboundFileContent,
+	outboundAttachmentContentType,
+} from "./attachment-content";
+import {
 	LINEWORKS_MAX_TEXT_LENGTH,
 	LineWorksFormatConverter,
 } from "./format-converter";
@@ -32,7 +37,7 @@ import {
 	getMessagePostbackData,
 	isMessagePostbackEvent,
 } from "./postback/postback-event";
-import { decodeThreadId, encodeThreadId } from "./thread-id";
+import { decodeThreadId, encodeThreadId, threadIdFromEventSource } from "./thread-id";
 import type {
 	LineWorksAdapterConfig,
 	LineWorksEventSource,
@@ -160,17 +165,7 @@ export class LineWorksAdapter implements Adapter<LineWorksThreadId, unknown> {
 
 		const event = raw;
 		const text = getEventText(event);
-		const threadId = event.source.channelId
-			? this.encodeThreadId({
-					channelId: event.source.channelId,
-					domainId: event.source.domainId,
-					kind: "channel",
-				})
-			: this.encodeThreadId({
-					domainId: event.source.domainId,
-					kind: "user",
-					userId: event.source.userId,
-				});
+		const threadId = this.encodeThreadId(threadIdFromEventSource(event.source));
 
 		const isChannelMessage = Boolean(event.source.channelId);
 		const attachments = this.buildInboundAttachments(event);
@@ -251,7 +246,7 @@ export class LineWorksAdapter implements Adapter<LineWorksThreadId, unknown> {
 			});
 			const content = {
 				fileId: uploaded.fileId ?? upload.fileId,
-				type: file.mimeType?.startsWith("image/") ? "image" : "file",
+				type: outboundAttachmentContentType({ mimeType: file.mimeType }),
 			} as const;
 			raw =
 				destination.kind === "user"
@@ -355,27 +350,17 @@ export class LineWorksAdapter implements Adapter<LineWorksThreadId, unknown> {
 
 	private buildInboundAttachments(event: LineWorksMessageEvent): Attachment[] {
 		const content = event.content;
-		if (
-			!(
-				content.type === "image" ||
-				content.type === "file" ||
-				content.type === "audio" ||
-				content.type === "video"
-			) ||
-			typeof content.fileId !== "string" ||
-			content.fileId.length === 0
-		) {
+		if (!isInboundFileContent(content)) {
 			return [];
 		}
 
 		const fileId = content.fileId;
-		const attachmentType = content.type === "image" ? "image" : content.type;
 
 		return [
 			{
 				fetchData: () => this.client.downloadAttachmentData(fileId),
 				name: `lineworks-${fileId}`,
-				type: attachmentType,
+				type: inboundAttachmentType(content.type),
 			},
 		];
 	}
@@ -404,17 +389,7 @@ export class LineWorksAdapter implements Adapter<LineWorksThreadId, unknown> {
 		},
 		options?: WebhookOptions,
 	): void {
-		const threadId = args.source.channelId
-			? this.encodeThreadId({
-					channelId: args.source.channelId,
-					domainId: args.source.domainId,
-					kind: "channel",
-				})
-			: this.encodeThreadId({
-					domainId: args.source.domainId,
-					kind: "user",
-					userId: args.source.userId,
-				});
+		const threadId = this.encodeThreadId(threadIdFromEventSource(args.source));
 		const decoded = decodePostbackData(args.data);
 
 		this.requireChat().processAction(
@@ -467,14 +442,8 @@ function isProcessableMessageEvent(event: LineWorksMessageEvent): boolean {
 	if (event.content.type === "text") {
 		return true;
 	}
-	return (
-		(event.content.type === "image" ||
-			event.content.type === "file" ||
-			event.content.type === "audio" ||
-			event.content.type === "video") &&
-		typeof event.content.fileId === "string" &&
-		event.content.fileId.length > 0
-	);
+
+	return isInboundFileContent(event.content);
 }
 
 function getEventText(event: LineWorksMessageEvent): string {

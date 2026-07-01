@@ -531,6 +531,27 @@ describe("LineWorksAdapter", () => {
     });
   });
 
+  it("falls back to plain text when every card button is disabled", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+
+    await adapter.postMessage(
+      adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+      Card({
+        title: "Actions",
+        children: [
+          Actions([
+            Button({ disabled: true, id: "disabled", label: "No" }),
+          ]),
+        ],
+      })
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      content: { text: "Actions", type: "text" },
+    });
+  });
+
   it("posts Chat SDK cards with buttons as LINE WORKS button templates", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
     const adapter = createAdapter({ fetch: fetchMock });
