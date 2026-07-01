@@ -1,6 +1,6 @@
 # LINE WORKS setup
 
-This adapter receives LINE WORKS Bot callbacks and sends text messages through the LINE WORKS Bot API.
+This adapter receives LINE WORKS Bot callbacks and sends messages through the LINE WORKS Bot API.
 
 ## Required values
 
@@ -9,10 +9,29 @@ Configure these values in your application:
 ```text
 LINEWORKS_BOT_ID
 LINEWORKS_BOT_SECRET
+```
+
+For local testing, you can also set:
+
+```text
 LINEWORKS_ACCESS_TOKEN
 ```
 
-`LINEWORKS_BOT_USER_NAME` is optional.
+For runtime use, prefer the service account environment variables so the adapter can request and cache access tokens:
+
+```text
+LINEWORKS_CLIENT_ID
+LINEWORKS_CLIENT_SECRET
+LINEWORKS_SERVICE_ACCOUNT
+LINEWORKS_PRIVATE_KEY
+LINEWORKS_SCOPES
+```
+
+`LINEWORKS_BOT_USER_NAME` is optional. When set, channel messages whose `content.text` contains `@Bot Name` are treated as mentions.
+
+`LINEWORKS_TREAT_CHANNEL_MESSAGES_AS_MENTIONS=true` treats all inbound channel text messages as mentions.
+
+All five service account variables are required when any one of them is set. If `LINEWORKS_ACCESS_TOKEN` is set, the adapter uses it directly and does not build a service account token provider.
 
 ## Callback URL
 
@@ -41,23 +60,50 @@ lineworks:user:{base64url(userId)}
 lineworks:channel:{base64url(channelId)}
 ```
 
-LINE WORKS does not expose Slack-style message reply threads through the Bot API, so the thread ID represents the destination conversation.
+`domainId` is preserved in raw event metadata where available, but it is not encoded into the thread ID because LINE WORKS send endpoints route by `botId` plus `userId` or `channelId`.
+
+LINE WORKS does not expose Slack-style message reply threads through the Bot API. The thread ID represents the destination conversation, not a message-level reply thread. Callback payloads do not include reply-to message metadata.
+
+## Message IDs
+
+Inbound and outbound Chat SDK message IDs are adapter-generated stable hashes or synthetic IDs. They are not the official LINE WORKS `messageId` returned by the Bot API.
+
+## Outbound text limits
+
+Outbound plain text over 2,000 characters throws `ValidationError` instead of being split automatically.
+
+Plain `string` and `{ raw: string }` messages are trimmed at both ends only. Internal newlines are preserved.
+
+When a Chat SDK Card contains buttons, only the Card body is sent as `contentText`. Any outer message text, markdown, or raw text on the same post is ignored.
+
+Chat SDK Card button templates have separate limits:
+
+- Content text: 1,000 characters or fewer.
+- Actions: 10 or fewer.
+- Button labels: 20 characters or fewer.
+- Message action postback: 1,000 characters or fewer.
+
+Button taps from button templates return a `message` callback with `content.postback`. Standalone `postback` callbacks from other templates are also supported.
 
 ## Current feature scope
 
 Supported:
 
+- Callback signature verification.
 - Inbound text messages.
+- Inbound file-like messages with `fileId` exposed as lazy attachments.
 - Outbound text messages.
-- Direct user messages.
-- Channel messages.
+- Outbound uploaded file and image messages.
+- Direct user messages and channel messages.
+- Service Account JWT token acquisition and caching.
+- Chat SDK Card buttons rendered as LINE WORKS button templates.
+- Button template taps and standalone postback callbacks dispatched as Chat SDK action events.
+- Stable thread ID encode/decode.
+- Basic HTTP error mapping.
 
 Not supported yet:
 
-- Service Account JWT token acquisition.
-- Files and attachments.
-- Templates and buttons.
-- Postback actions.
+- Rich templates beyond basic button templates.
 - Message history fetching.
 - Typing indicators.
 - Message edit/delete.
