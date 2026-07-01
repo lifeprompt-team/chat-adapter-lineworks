@@ -64,4 +64,34 @@ describe("isLineWorksChannelMessageMention", () => {
       }),
     ).toBe(false);
   });
+
+  it("表示名に regex 特殊文字があっても @mention を検出する", () => {
+    expect(
+      isLineWorksChannelMessageMention({
+        botUserName: "Bot (Dev)+1",
+        text: "@Bot (Dev)+1 hello",
+      }),
+    ).toBe(true);
+    expect(
+      isLineWorksChannelMessageMention({
+        botUserName: "Bot (Dev)+1",
+        text: "@Bot (Dev)+1x hello",
+      }),
+    ).toBe(false);
+  });
+
+  it("@表示名 の大文字小文字は区別しない", () => {
+    expect(
+      isLineWorksChannelMessageMention({
+        botUserName: "AxMates Bot",
+        text: "@axmates bot hello",
+      }),
+    ).toBe(true);
+    expect(
+      isLineWorksChannelMessageMention({
+        botUserName: "AxMates Bot",
+        text: "@AXMATES BOT",
+      }),
+    ).toBe(true);
+  });
 });

@@ -113,6 +113,7 @@ When `postMessage()` sends text or a button template plus one or more attachment
 
 - 1:1 messages are treated as mentions.
 - Channel messages are not treated as mentions by default.
+- Channel text messages are treated as mentions when the message contains a plain-text `@Bot Name` mention that matches `LINEWORKS_BOT_USER_NAME` or the adapter `userName` option.
 - Set `treatChannelMessagesAsMentions: true` if your bot should process all channel text messages.
 - File-like non-text events with `fileId` are exposed as lazy attachments.
 - Other non-text events are logged and ignored.
@@ -140,6 +141,7 @@ This package depends on Chat SDK primitives:
 src/
   adapter.ts
   attachment-content.ts
+  channel-mention.ts
   client.ts
   errors.ts
   factory.ts
@@ -160,7 +162,7 @@ src/
 Run tests:
 
 ```sh
-npm test           # vitest + coverage
+npm test           # 101 tests (vitest + coverage)
 npm run typecheck
 npm run build
 ```
