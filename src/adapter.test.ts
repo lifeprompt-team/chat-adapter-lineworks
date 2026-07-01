@@ -104,11 +104,11 @@ describe("LineWorksAdapter", () => {
     expect(adapter.parseMessage(event).isMention).toBe(true);
   });
 
-  it("treats channel messages with bot mention tag as mentions", () => {
-    const adapter = createAdapter({ botUserId: "bot-user" });
+  it("treats channel messages with bot display-name mention as mentions", () => {
+    const adapter = createAdapter({ userName: "AxMates Bot" });
     const event: LineWorksMessageEvent = {
       content: {
-        text: 'hello <m userId="bot-user"> help me',
+        text: "@AxMates Bot \nやっほー",
         type: "text",
       },
       issuedTime: "2026-04-29T00:00:00Z",

@@ -15,7 +15,6 @@ export function createLineWorksAdapter(
     (accessToken
       ? undefined
       : createServiceAccountTokenProviderFromEnv({ fetch: config.fetch }));
-  const botUserId = config.botUserId ?? process.env.LINEWORKS_BOT_USER_ID;
   const userName =
     config.userName ?? process.env.LINEWORKS_BOT_USER_NAME ?? "lineworks-bot";
   const treatChannelMessagesAsMentions =
@@ -48,7 +47,6 @@ export function createLineWorksAdapter(
     accessTokenProvider,
     botId,
     botSecret,
-    botUserId,
     fetch: config.fetch,
     logger: config.logger,
     treatChannelMessagesAsMentions,

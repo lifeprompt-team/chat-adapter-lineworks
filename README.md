@@ -55,11 +55,10 @@ LINEWORKS_SERVICE_ACCOUNT
 LINEWORKS_PRIVATE_KEY
 LINEWORKS_SCOPES
 LINEWORKS_BOT_USER_NAME
-LINEWORKS_BOT_USER_ID
 LINEWORKS_TREAT_CHANNEL_MESSAGES_AS_MENTIONS
 ```
 
-`LINEWORKS_BOT_USER_ID` is used to detect `<m userId="...">` mention tags in channel messages.
+`LINEWORKS_BOT_USER_NAME` is used to detect `@Bot Name` plain-text mentions in channel messages.
 Set `LINEWORKS_TREAT_CHANNEL_MESSAGES_AS_MENTIONS=true` to treat all channel text messages as mentions.
 
 `LINEWORKS_ACCESS_TOKEN` is still supported for local testing. For runtime use,
