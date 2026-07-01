@@ -21,6 +21,7 @@ import { createLineWorksAdapter } from "chat-adapter-lineworks";
 const lineworks = createLineWorksAdapter({
   botId: process.env.LINEWORKS_BOT_ID!,
   botSecret: process.env.LINEWORKS_BOT_SECRET!,
+  accessToken: process.env.LINEWORKS_ACCESS_TOKEN!,
 });
 
 const chat = new Chat({
@@ -54,7 +55,12 @@ LINEWORKS_SERVICE_ACCOUNT
 LINEWORKS_PRIVATE_KEY
 LINEWORKS_SCOPES
 LINEWORKS_BOT_USER_NAME
+LINEWORKS_BOT_USER_ID
+LINEWORKS_TREAT_CHANNEL_MESSAGES_AS_MENTIONS
 ```
+
+`LINEWORKS_BOT_USER_ID` is used to detect `<m userId="...">` mention tags in channel messages.
+Set `LINEWORKS_TREAT_CHANNEL_MESSAGES_AS_MENTIONS=true` to treat all channel text messages as mentions.
 
 `LINEWORKS_ACCESS_TOKEN` is still supported for local testing. For runtime use,
 prefer the service account environment variables so the adapter can request and
@@ -73,7 +79,7 @@ See [docs/setup.md](docs/setup.md) for LINE WORKS callback and routing details.
 - Channel detail and channel member list client primitives.
 - Bot attachment upload and download client primitives.
 - Chat SDK Card buttons rendered as LINE WORKS button templates.
-- Postback callbacks dispatched as Chat SDK action events.
+- Button template taps (`type: "message"` actions) and standalone postback events dispatched as Chat SDK action events.
 - Stable thread ID encode/decode.
 - Basic HTTP error mapping.
 
@@ -110,6 +116,15 @@ Inbound event IDs, postback action IDs, and outbound `postMessage()` return valu
 - File-like non-text events with `fileId` are exposed as lazy attachments.
 - Other non-text events are logged and ignored.
 - Outbound text over 2,000 characters throws `ValidationError` instead of being split automatically.
+- Plain `string` and `{ raw: string }` messages are trimmed at both ends only. Internal newlines are preserved.
+- When a Chat SDK Card contains buttons, only the Card body is sent as `contentText`. Any outer message text, markdown, or raw text on the same post is ignored.
+
+## Button templates
+
+- `Button` actions are sent as LINE WORKS message actions (`type: "message"` with a `postback` field).
+- Button taps return a `message` callback whose `content.postback` carries the encoded action data.
+- Standalone `postback` callbacks (for example from carousel or rich menu actions) are also supported.
+- Limits: content text 1,000 characters, 10 actions, labels 20 characters, message action postback 1,000 characters.
 
 ## Development
 

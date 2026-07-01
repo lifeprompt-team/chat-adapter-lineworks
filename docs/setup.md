@@ -29,6 +29,10 @@ LINEWORKS_SCOPES
 
 `LINEWORKS_BOT_USER_NAME` is optional.
 
+`LINEWORKS_BOT_USER_ID` is optional. When set, channel messages containing `<m userId="...">` tags that reference this user ID are treated as mentions.
+
+`LINEWORKS_TREAT_CHANNEL_MESSAGES_AS_MENTIONS=true` treats all inbound channel text messages as mentions.
+
 All five service account variables are required when any one of them is set. If `LINEWORKS_ACCESS_TOKEN` is set, the adapter uses it directly and does not build a service account token provider.
 
 ## Callback URL
@@ -70,12 +74,18 @@ Inbound and outbound Chat SDK message IDs are adapter-generated stable hashes or
 
 Outbound plain text over 2,000 characters throws `ValidationError` instead of being split automatically.
 
+Plain `string` and `{ raw: string }` messages are trimmed at both ends only. Internal newlines are preserved.
+
+When a Chat SDK Card contains buttons, only the Card body is sent as `contentText`. Any outer message text, markdown, or raw text on the same post is ignored.
+
 Chat SDK Card button templates have separate limits:
 
 - Content text: 1,000 characters or fewer.
 - Actions: 10 or fewer.
 - Button labels: 20 characters or fewer.
-- Postback data: 1,000 characters or fewer.
+- Message action postback: 1,000 characters or fewer.
+
+Button taps from button templates return a `message` callback with `content.postback`. Standalone `postback` callbacks from other templates are also supported.
 
 ## Current feature scope
 
@@ -89,7 +99,7 @@ Supported:
 - Direct user messages and channel messages.
 - Service Account JWT token acquisition and caching.
 - Chat SDK Card buttons rendered as LINE WORKS button templates.
-- Postback callbacks dispatched as Chat SDK action events.
+- Button template taps and standalone postback callbacks dispatched as Chat SDK action events.
 - Stable thread ID encode/decode.
 - Basic HTTP error mapping.
 
