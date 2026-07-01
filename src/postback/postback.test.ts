@@ -38,6 +38,20 @@ describe("encodePostbackData / decodePostbackData", () => {
 			}),
 		).toThrow(ValidationError);
 	});
+
+	it("accepts postback payloads at the API limit", () => {
+		const actionId = "a".repeat(MAX_MESSAGE_ACTION_POSTBACK_LENGTH);
+
+		expect(encodePostbackData({ actionId })).toHaveLength(
+			MAX_MESSAGE_ACTION_POSTBACK_LENGTH,
+		);
+	});
+
+	it("rejects postback payloads one character over the API limit", () => {
+		expect(() =>
+			encodePostbackData({ actionId: "a".repeat(MAX_MESSAGE_ACTION_POSTBACK_LENGTH + 1) }),
+		).toThrow(ValidationError);
+	});
 });
 
 describe("isMessagePostbackEvent", () => {

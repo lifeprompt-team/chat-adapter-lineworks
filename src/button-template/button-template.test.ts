@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "@chat-adapter/shared";
-import { Actions, Button, Card, CardText, LinkButton } from "chat";
+import {
+	Actions,
+	Button,
+	Card,
+	CardLink,
+	CardText,
+	Field,
+	Fields,
+	Image,
+	LinkButton,
+} from "chat";
 import { toLineWorksButtonTemplateContent } from "./button-template";
 
 describe("toLineWorksButtonTemplateContent", () => {
@@ -85,5 +95,54 @@ describe("toLineWorksButtonTemplateContent", () => {
 				}),
 			),
 		).toThrow(ValidationError);
+	});
+
+	it("rejects action ids containing newlines", () => {
+		expect(() =>
+			toLineWorksButtonTemplateContent(
+				Card({
+					title: "Invalid action id",
+					children: [
+						Actions([
+							Button({
+								id: "approve\nbad",
+								label: "Approve",
+							}),
+						]),
+					],
+				}),
+			),
+		).toThrow(ValidationError);
+	});
+
+	it("collects subtitle, fields, links, and image alt into contentText", () => {
+		expect(
+			toLineWorksButtonTemplateContent(
+				Card({
+					title: "Title",
+					subtitle: "Subtitle",
+					children: [
+						CardText("Body"),
+						Fields([Field({ label: "Status", value: "Open" })]),
+						CardLink({ label: "Docs", url: "https://example.com/docs" }),
+						Image({
+							alt: "Screenshot",
+							url: "https://example.com/image.png",
+						}),
+						Actions([Button({ id: "ok", label: "OK" })]),
+					],
+				}),
+			),
+		).toMatchObject({
+			contentText: [
+				"Title",
+				"Subtitle",
+				"Body",
+				"Status: Open",
+				"Docs: https://example.com/docs",
+				"Screenshot",
+			].join("\n"),
+			type: "button_template",
+		});
 	});
 });

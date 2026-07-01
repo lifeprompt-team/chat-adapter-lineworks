@@ -184,6 +184,35 @@ describe("LineWorksAdapter", () => {
     ]);
   });
 
+  it("downloads inbound attachment data through the client", async () => {
+    const fileBytes = Buffer.from("image-bytes");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("", {
+          headers: { location: "https://download.example.com/file-1" },
+          status: 302,
+        })
+      )
+      .mockResolvedValueOnce(new Response(fileBytes, { status: 200 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+    const event: LineWorksMessageEvent = {
+      content: { fileId: "file-1", type: "image" },
+      issuedTime: "2026-04-29T00:00:00Z",
+      source: { userId: "user-1" },
+      type: "message",
+    };
+
+    const message = adapter.parseMessage(event);
+    const attachment = message.attachments[0];
+
+    await expect(attachment?.fetchData()).resolves.toEqual(fileBytes);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://www.worksapis.com/v1.0/bots/bot-id/attachments/file-1"
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://download.example.com/file-1");
+  });
+
   it("rejects invalid webhook signatures", async () => {
     const adapter = createAdapter();
     await adapter.initialize(createChat());
@@ -244,6 +273,48 @@ describe("LineWorksAdapter", () => {
     });
     expect(JSON.parse(fetchMock.mock.calls[3]?.[1]?.body as string)).toEqual({
       content: { fileId: "file-1", type: "file" },
+    });
+  });
+
+  it("posts uploaded images as LINE WORKS image messages", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("", { status: 201 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            fileId: "file-1",
+            uploadUrl: "https://upload.example.com/file",
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            fileId: "file-1",
+            fileName: "image.png",
+            fileSize: 10,
+          }),
+          { status: 201 }
+        )
+      )
+      .mockResolvedValueOnce(new Response("", { status: 201 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+
+    await adapter.postMessage(adapter.encodeThreadId({ kind: "user", userId: "user-1" }), {
+      files: [
+        {
+          data: Buffer.from("image"),
+          filename: "image.png",
+          mimeType: "image/png",
+        },
+      ],
+      raw: "see attached",
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[3]?.[1]?.body as string)).toEqual({
+      content: { fileId: "file-1", type: "image" },
     });
   });
 
@@ -387,6 +458,47 @@ describe("LineWorksAdapter", () => {
     });
   });
 
+  it("rejects button templates with action ids containing newlines", async () => {
+    const adapter = createAdapter();
+
+    await expect(
+      adapter.postMessage(
+        adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+        Card({
+          title: "Invalid action id",
+          children: [
+            Actions([
+              Button({
+                id: "approve\nbad",
+                label: "Approve",
+              }),
+            ]),
+          ],
+        })
+      )
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("accepts button templates with postback at the 1000 character limit", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
+    const adapter = createAdapter({ fetch: fetchMock });
+    const actionId = "a".repeat(1000);
+
+    await adapter.postMessage(
+      adapter.encodeThreadId({ kind: "user", userId: "user-1" }),
+      Card({
+        title: "Limit",
+        children: [Actions([Button({ id: actionId, label: "OK" })])],
+      })
+    );
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toMatchObject({
+      content: {
+        actions: [{ postback: actionId, type: "message" }],
+      },
+    });
+  });
+
   it("excludes disabled buttons from button templates", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 201 }));
     const adapter = createAdapter({ fetch: fetchMock });
@@ -504,6 +616,53 @@ describe("LineWorksAdapter", () => {
     });
   });
 
+  it("processes message action postbacks with action id only", async () => {
+    const processAction = vi.fn();
+    const processMessage = vi.fn();
+    const adapter = createAdapter();
+    await adapter.initialize(createChat({ processAction, processMessage }));
+
+    const body = JSON.stringify({
+      content: {
+        postback: "approve",
+        text: "Approve",
+        type: "text",
+      },
+      issuedTime: "2026-04-29T00:00:00Z",
+      source: {
+        channelId: "channel-1",
+        userId: "user-1",
+      },
+      type: "message",
+    });
+
+    const response = await adapter.handleWebhook(
+      new Request("https://example.com/webhook", {
+        body,
+        headers: {
+          "X-WORKS-BotId": "bot-id",
+          "X-WORKS-Signature": createLineWorksSignature(body, "bot-secret"),
+        },
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(processAction).toHaveBeenCalledTimes(1);
+    expect(processMessage).not.toHaveBeenCalled();
+    expect(processAction.mock.calls[0]?.[0]).toMatchObject({
+      actionId: "approve",
+      threadId: adapter.encodeThreadId({
+        channelId: "channel-1",
+        kind: "channel",
+      }),
+      user: {
+        userId: "user-1",
+      },
+    });
+    expect(processAction.mock.calls[0]?.[0]).not.toHaveProperty("value");
+  });
+
   it("processes postback callbacks as Chat SDK actions", async () => {
     const processAction = vi.fn();
     const adapter = createAdapter();
@@ -543,6 +702,47 @@ describe("LineWorksAdapter", () => {
       },
       value: "pending-1",
     });
+  });
+
+  it("processes standalone postback callbacks with action id only", async () => {
+    const processAction = vi.fn();
+    const adapter = createAdapter();
+    await adapter.initialize(createChat({ processAction }));
+
+    const body = JSON.stringify({
+      data: "approve",
+      issuedTime: "2026-04-29T00:00:00Z",
+      source: {
+        channelId: "channel-1",
+        userId: "user-1",
+      },
+      type: "postback",
+    });
+
+    const response = await adapter.handleWebhook(
+      new Request("https://example.com/webhook", {
+        body,
+        headers: {
+          "X-WORKS-BotId": "bot-id",
+          "X-WORKS-Signature": createLineWorksSignature(body, "bot-secret"),
+        },
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(processAction).toHaveBeenCalledTimes(1);
+    expect(processAction.mock.calls[0]?.[0]).toMatchObject({
+      actionId: "approve",
+      threadId: adapter.encodeThreadId({
+        channelId: "channel-1",
+        kind: "channel",
+      }),
+      user: {
+        userId: "user-1",
+      },
+    });
+    expect(processAction.mock.calls[0]?.[0]).not.toHaveProperty("value");
   });
 
   it("treats typing and reactions as no-op", async () => {

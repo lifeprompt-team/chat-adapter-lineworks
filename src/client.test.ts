@@ -217,4 +217,80 @@ describe("LineWorksClient", () => {
       redirect: "manual",
     });
   });
+
+  it("rejects attachment download URLs without a Location header", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 302 }));
+    const client = new LineWorksClient({
+      accessToken: "token",
+      botId: "bot-id",
+      fetch: fetchMock,
+    });
+
+    await expect(client.getAttachmentDownloadUrl("file-1")).rejects.toBeInstanceOf(
+      ValidationError
+    );
+  });
+
+  it("downloads attachment data from the resolved URL", async () => {
+    const fileBytes = Buffer.from("attachment-bytes");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("", {
+          headers: { location: "https://download.example.com/file-1" },
+          status: 302,
+        })
+      )
+      .mockResolvedValueOnce(new Response(fileBytes, { status: 200 }));
+    const client = new LineWorksClient({
+      accessToken: "token",
+      botId: "bot-id",
+      fetch: fetchMock,
+    });
+
+    await expect(client.downloadAttachmentData("file-1")).resolves.toEqual(fileBytes);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://www.worksapis.com/v1.0/bots/bot-id/attachments/file-1"
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://download.example.com/file-1");
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: "GET" });
+  });
+
+  it("creates channels with members and title", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          channelId: "channel-1",
+          channelType: { type: "MULTI_USERS" },
+        }),
+        { status: 201 }
+      )
+    );
+    const client = new LineWorksClient({
+      accessToken: "token",
+      botId: "bot-id",
+      fetch: fetchMock,
+    });
+
+    await expect(
+      client.createChannel({
+        members: ["user-1", "user-2"],
+        title: "Support",
+      })
+    ).resolves.toMatchObject({
+      channelId: "channel-1",
+      channelType: { type: "MULTI_USERS" },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://www.worksapis.com/v1.0/bots/bot-id/channels",
+      expect.objectContaining({
+        body: JSON.stringify({
+          members: ["user-1", "user-2"],
+          title: "Support",
+        }),
+        method: "POST",
+      })
+    );
+  });
 });

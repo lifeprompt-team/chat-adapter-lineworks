@@ -96,6 +96,9 @@ describe("createLineWorksAdapter", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       "https://auth.worksmobile.com/oauth2/v2.0/token"
     );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://www.worksapis.com/v1.0/bots/bot-id/users/user-1/messages"
+    );
   });
 
   it("throws when bot credentials and auth env are missing", () => {
