@@ -147,6 +147,19 @@ src/
   token-provider.ts
   types.ts
   webhook.ts
+  button-template/
+    button-template.ts
+  postback/
+    postback-data.ts
+    postback-event.ts
+```
+
+Run tests:
+
+```sh
+npm test           # 86 tests (vitest + coverage)
+npm run typecheck
+npm run build
 ```
 
 ## License
